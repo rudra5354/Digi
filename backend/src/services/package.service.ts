@@ -1,5 +1,7 @@
 import { supabase } from './supabase';
 import { generateAccessCode, hashPin } from '../utils/crypto';
+import { uploadFileToStorage } from './storage';
+import crypto from 'crypto';
 
 export interface CreatePackageDTO {
   senderId: string;
@@ -102,4 +104,97 @@ export const createPackage = async (dto: CreatePackageDTO): Promise<PackageRespo
     downloadCount: newPackage.download_count,
     createdAt: newPackage.created_at,
   };
+};
+
+export interface PackageFileResponse {
+  id: string;
+  packageId: string;
+  fileName: string;
+  filePath: string;
+  fileSize: number;
+  mimeType: string;
+  createdAt: string;
+}
+
+/**
+ * Uploads and attaches multiple files to an existing active package.
+ */
+export const addFilesToPackage = async (
+  packageId: string,
+  senderId: string,
+  files: Express.Multer.File[]
+): Promise<PackageFileResponse[]> => {
+  if (!files || files.length === 0) {
+    throw new Error('No files provided for upload.');
+  }
+
+  // 1. Verify package ownership and active status
+  const { data: pkg, error: pkgError } = await supabase
+    .from('packages')
+    .select('id, sender_id, status, expires_at')
+    .eq('id', packageId)
+    .single();
+
+  if (pkgError || !pkg) {
+    throw new Error('Package not found.');
+  }
+
+  if (pkg.sender_id !== senderId) {
+    throw new Error('Unauthorized. You do not own this package.');
+  }
+
+  if (pkg.status !== 'ACTIVE' || new Date(pkg.expires_at) < new Date()) {
+    throw new Error('Cannot add files to an expired or revoked package.');
+  }
+
+  const fileRecords: PackageFileResponse[] = [];
+
+  // 2. Upload each file to Supabase Storage and insert metadata into DB
+  for (const file of files) {
+    const fileId = crypto.randomUUID();
+    
+    // Upload buffer to private bucket
+    const { filePath, error: uploadErr } = await uploadFileToStorage(
+      packageId,
+      fileId,
+      file.buffer,
+      file.mimetype,
+      file.originalname
+    );
+
+    if (uploadErr || !filePath) {
+      throw new Error(`Failed to upload file '${file.originalname}' to storage: ${uploadErr?.message}`);
+    }
+
+    // Insert into package_files table
+    const { data: dbFile, error: dbErr } = await supabase
+      .from('package_files')
+      .insert({
+        id: fileId,
+        package_id: packageId,
+        file_name: file.originalname,
+        file_path: filePath,
+        file_size: file.size,
+        mime_type: file.mimetype,
+      })
+      .select()
+      .single();
+
+    if (dbErr || !dbFile) {
+      console.error('Failed to insert package_files record:', dbErr?.message);
+      throw new Error(`Failed to record file '${file.originalname}' in database.`);
+    }
+
+    fileRecords.push({
+      id: dbFile.id,
+      packageId: dbFile.package_id,
+      fileName: dbFile.file_name,
+      filePath: dbFile.file_path,
+      fileSize: Number(dbFile.file_size),
+      mimeType: dbFile.mime_type,
+      createdAt: dbFile.created_at,
+    });
+  }
+
+  return fileRecords;
 };

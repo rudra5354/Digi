@@ -138,7 +138,29 @@ export const CreatePackageModal: React.FC<CreatePackageModalProps> = ({
         throw new Error(result.error?.message || 'Failed to create package');
       }
 
-      // 3. Show Created Success Screen
+      // 3. If files are selected, upload them to POST /api/packages/:id/files
+      if (selectedFiles.length > 0) {
+        const formData = new FormData();
+        selectedFiles.forEach((file) => {
+          formData.append('files', file);
+        });
+
+        const uploadResponse = await fetch(`/api/packages/${result.data.id}/files`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+          body: formData,
+        });
+
+        const uploadResult = await uploadResponse.json();
+
+        if (!uploadResponse.ok || !uploadResult.success) {
+          throw new Error(uploadResult.error?.message || 'Failed to upload files for package');
+        }
+      }
+
+      // 4. Show Created Success Screen
       setCreatedPackage(result.data);
       if (onPackageCreated) {
         onPackageCreated(result.data);

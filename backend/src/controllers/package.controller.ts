@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { createPackage } from '../services/package.service';
+import { createPackage, addFilesToPackage } from '../services/package.service';
 
 const createPackageSchema = z.object({
   title: z
@@ -66,6 +66,67 @@ export const createPackageHandler = async (req: Request, res: Response, next: Ne
     return res.status(201).json({
       success: true,
       data: createdPackage,
+      error: null,
+      meta: {},
+    });
+  } catch (err: any) {
+    next(err);
+  }
+};
+
+/**
+ * Controller to handle POST /api/packages/:id/files requests
+ */
+export const uploadFilesHandler = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        data: null,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'User authentication context is missing.',
+        },
+        meta: {},
+      });
+    }
+
+    const { id: packageId } = req.params;
+
+    if (!packageId) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'Package ID parameter is required.',
+        },
+        meta: {},
+      });
+    }
+
+    const files = req.files as Express.Multer.File[];
+
+    if (!files || files.length === 0) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'No files uploaded.',
+        },
+        meta: {},
+      });
+    }
+
+    const uploadedFiles = await addFilesToPackage(packageId, req.user.id, files);
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        packageId,
+        files: uploadedFiles,
+      },
       error: null,
       meta: {},
     });
