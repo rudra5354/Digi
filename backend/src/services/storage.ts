@@ -20,7 +20,7 @@ export const ensureBucketExists = async (): Promise<boolean> => {
     if (!bucketExists) {
       const { error: createError } = await supabase.storage.createBucket(BUCKET_NAME, {
         public: false, // Private bucket: direct public access disallowed
-        fileSizeLimit: 104857600, // 100MB max per file limit
+        fileSizeLimit: 5242880, // 5MB max per file limit (5 * 1024 * 1024 bytes)
       });
 
       if (createError) {
