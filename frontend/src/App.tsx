@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
-import { Package2, Lock, LayoutDashboard, HelpCircle, LogOut, Loader2 } from 'lucide-react';
+import { Package2, Lock, LayoutDashboard, HelpCircle, LogOut, Loader2, Plus } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { User } from '@supabase/supabase-js';
+import { CreatePackageModal } from './components/CreatePackageModal';
 
 interface NavigationProps {
   user: User | null;
   onLogout: () => Promise<void>;
+  onOpenCreateModal: () => void;
 }
 
-function Navigation({ user, onLogout }: NavigationProps) {
+function Navigation({ user, onLogout, onOpenCreateModal }: NavigationProps) {
   return (
     <header className="sticky top-0 z-50 w-full glass-panel border-b border-card-border bg-[#0a0a0c]/80 backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -24,6 +26,12 @@ function Navigation({ user, onLogout }: NavigationProps) {
               <Link to="/dashboard" className="flex items-center gap-1.5 text-sm font-medium text-muted hover:text-white transition-colors">
                 <LayoutDashboard className="h-4 w-4" /> Dashboard
               </Link>
+              <button 
+                onClick={onOpenCreateModal}
+                className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold bg-secondary hover:bg-secondary-hover text-black rounded-md transition-colors shadow-glow-cyan"
+              >
+                <Plus className="h-3.5 w-3.5" /> Create Package
+              </button>
               <div className="flex items-center gap-3 pl-4 border-l border-card-border">
                 <span className="text-xs text-muted font-mono hidden md:inline">
                   {user.email}
@@ -128,9 +136,10 @@ function Login({ user }: { user: User | null }) {
 interface DashboardProps {
   user: User | null;
   loading: boolean;
+  onOpenCreateModal: () => void;
 }
 
-function Dashboard({ user, loading }: DashboardProps) {
+function Dashboard({ user, loading, onOpenCreateModal }: DashboardProps) {
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -157,12 +166,15 @@ function Dashboard({ user, loading }: DashboardProps) {
           <h1 className="text-3xl font-extrabold text-white tracking-tight">Sender Dashboard</h1>
           <p className="text-sm text-muted">Create and manage your secure digital packages.</p>
         </div>
-        <button className="h-10 px-4 bg-secondary hover:bg-secondary-hover text-black font-semibold rounded-lg transition-colors shadow-glow-cyan text-sm">
-          + Create Package
+        <button 
+          onClick={onOpenCreateModal}
+          className="h-10 px-4 bg-secondary hover:bg-secondary-hover text-black font-semibold rounded-lg transition-colors shadow-glow-cyan text-sm flex items-center gap-1.5"
+        >
+          <Plus className="h-4 w-4" /> Create Package
         </button>
       </div>
       <div className="p-12 text-center rounded-2xl glass-panel border border-card-border shadow-glass">
-        <p className="text-muted">No active packages found. Build one to get started!</p>
+        <p className="text-muted">No active packages found. Click "+ Create Package" to build one!</p>
       </div>
     </div>
   );
@@ -171,6 +183,7 @@ function Dashboard({ user, loading }: DashboardProps) {
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   useEffect(() => {
     // 1. Check initial active session
@@ -211,12 +224,25 @@ function App() {
   return (
     <Router>
       <div className="min-h-screen bg-background text-foreground flex flex-col">
-        <Navigation user={user} onLogout={handleLogout} />
+        <Navigation 
+          user={user} 
+          onLogout={handleLogout} 
+          onOpenCreateModal={() => setIsCreateModalOpen(true)}
+        />
         <main className="flex-grow max-w-7xl w-full mx-auto px-4 py-8">
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login user={user} />} />
-            <Route path="/dashboard" element={<Dashboard user={user} loading={loading} />} />
+            <Route 
+              path="/dashboard" 
+              element={
+                <Dashboard 
+                  user={user} 
+                  loading={loading} 
+                  onOpenCreateModal={() => setIsCreateModalOpen(true)}
+                />
+              } 
+            />
             <Route path="*" element={
               <div className="text-center mt-20">
                 <HelpCircle className="h-12 w-12 text-muted mx-auto mb-4" />
@@ -226,6 +252,12 @@ function App() {
             } />
           </Routes>
         </main>
+
+        {/* Global Create Package Modal */}
+        <CreatePackageModal 
+          isOpen={isCreateModalOpen} 
+          onClose={() => setIsCreateModalOpen(false)}
+        />
       </div>
     </Router>
   );
