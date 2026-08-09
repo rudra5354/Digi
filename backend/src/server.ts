@@ -1,10 +1,12 @@
 import app from './app';
 import { config } from './config';
 import { verifySupabaseConnection } from './services/supabase';
+import { ensureBucketExists } from './services/storage';
 
 const server = app.listen(config.PORT, async () => {
   console.log(`🚀 Digi-Doc API server running in ${config.NODE_ENV} mode on port ${config.PORT}`);
   await verifySupabaseConnection();
+  await ensureBucketExists();
 });
 
 // Graceful Shutdown
