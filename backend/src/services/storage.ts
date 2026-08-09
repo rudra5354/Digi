@@ -43,7 +43,7 @@ export const ensureBucketExists = async (): Promise<boolean> => {
 export const uploadFileToStorage = async (
   packageId: string,
   fileId: string,
-  fileBuffer: Buffer,
+  fileData: Buffer | NodeJS.ReadableStream | ReadableStream | ArrayBuffer | any,
   mimeType: string,
   fileName: string
 ): Promise<{ filePath: string | null; error: Error | null }> => {
@@ -54,7 +54,7 @@ export const uploadFileToStorage = async (
 
     const { data, error } = await supabase.storage
       .from(BUCKET_NAME)
-      .upload(filePath, fileBuffer, {
+      .upload(filePath, fileData, {
         contentType: mimeType,
         upsert: true,
       });

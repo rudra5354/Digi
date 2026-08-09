@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { generateAccessCode, hashPin } from '../utils/crypto';
-import { uploadFileToStorage } from './storage';
+import { uploadFileToStorage, deleteFileFromStorage } from './storage';
 import crypto from 'crypto';
 
 export interface CreatePackageDTO {
@@ -181,6 +181,8 @@ export const addFilesToPackage = async (
       .single();
 
     if (dbErr || !dbFile) {
+      // Rollback: delete storage object if DB record creation failed
+      await deleteFileFromStorage(filePath);
       console.error('Failed to insert package_files record:', dbErr?.message);
       throw new Error(`Failed to record file '${file.originalname}' in database.`);
     }
