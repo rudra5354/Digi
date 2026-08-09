@@ -1,0 +1,2 @@
+-- Digi-Doc Database Migrations Placeholder
+-- This file will be populated in Phase 4 with the PostgreSQL schema and Supabase RLS.
