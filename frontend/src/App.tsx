@@ -23,6 +23,7 @@ import { supabase } from './lib/supabase';
 import { User } from '@supabase/supabase-js';
 import { CreatePackageModal } from './components/CreatePackageModal';
 import { ShareView } from './components/ShareView';
+import { VerifyPackage } from './components/VerifyPackage';
 import { PackageQrCode } from './components/PackageQrCode';
 import { getPackageRetrievalUrl } from './lib/qr';
 
@@ -92,7 +93,7 @@ function Home() {
       return;
     }
 
-    navigate(`/share/${normalized.toUpperCase()}`);
+    navigate(`/verify?code=${encodeURIComponent(normalized.toUpperCase())}`);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -110,7 +111,7 @@ function Home() {
         <Package2 className="h-8 w-8 text-primary animate-pulse-glow" />
       </div>
       <h1 className="text-2xl font-bold tracking-tight text-white mb-2">Claim Your Package</h1>
-      <p className="text-sm text-muted mb-6">Enter an 8-character Access Code to download files secure and fast.</p>
+      <p className="text-sm text-muted mb-6">Enter an 8-character Access Code to retrieve secure package details.</p>
       
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="relative">
@@ -623,6 +624,7 @@ function App() {
         <main className="flex-grow max-w-7xl w-full mx-auto px-4 py-8">
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/verify" element={<VerifyPackage />} />
             <Route path="/login" element={<Login user={user} />} />
             <Route path="/share/:accessCode" element={<ShareView />} />
             <Route 

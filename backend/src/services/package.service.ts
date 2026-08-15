@@ -219,7 +219,9 @@ export interface SenderPackageResponse {
  * Used for recipient initial screen.
  */
 export const getPackageMetadataByAccessCode = async (
-  accessCode: string
+  accessCode: string,
+  clientIp?: string,
+  userAgent?: string
 ): Promise<Omit<PackageResponse, 'senderId'> & { filesCount: number }> => {
   const formattedCode = accessCode.trim().toUpperCase();
 
@@ -258,7 +260,7 @@ export const getPackageMetadataByAccessCode = async (
     console.error('Error counting files for package:', countErr.message);
   }
 
-  return {
+  const metadata = {
     id: pkg.id,
     title: pkg.title,
     accessCode: pkg.access_code,
@@ -269,6 +271,22 @@ export const getPackageMetadataByAccessCode = async (
     createdAt: pkg.created_at,
     filesCount: count || 0,
   };
+
+  // Retrieval logging is useful to the sender but must not affect a recipient
+  // receiving safe metadata if logging is temporarily unavailable.
+  try {
+    await supabase.from('package_access_logs').insert({
+      package_id: pkg.id,
+      access_type: 'VERIFY',
+      status: 'SUCCESS',
+      ip_address: clientIp || null,
+      user_agent: userAgent || null,
+    });
+  } catch (logError: any) {
+    console.warn('Non-blocking package retrieval log failed:', logError.message);
+  }
+
+  return metadata;
 };
 
 /**

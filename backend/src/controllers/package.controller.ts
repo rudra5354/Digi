@@ -332,6 +332,56 @@ export const getPackageMetadataHandler = async (req: Request, res: Response, nex
 };
 
 /**
+ * Public Phase 10 retrieval endpoint. It deliberately returns only the
+ * metadata a recipient needs to proceed to later verification stages.
+ */
+export const retrievePackageHandler = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { accessCode } = req.params;
+    const normalizedCode = accessCode?.trim().replace(/\s+/g, '');
+
+    if (!normalizedCode || !/^[a-zA-Z2-9]{4}-[a-zA-Z2-9]{4}$/.test(normalizedCode)) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        error: {
+          code: 'INVALID_ACCESS_CODE',
+          message: 'Enter a valid access code in the format XXXX-XXXX.',
+        },
+        meta: {},
+      });
+    }
+
+    const metadata = await getPackageMetadataByAccessCode(normalizedCode, req.ip, req.headers['user-agent']);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        id: metadata.id,
+        title: metadata.title,
+        status: metadata.status,
+        expiresAt: metadata.expiresAt,
+        hasPin: metadata.hasPin,
+        fileCount: metadata.filesCount,
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err: any) {
+    if (err.message === 'Package not found.') {
+      return res.status(404).json({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Package not found.' }, meta: {} });
+    }
+    if (err.message.includes('Status: EXPIRED')) {
+      return res.status(410).json({ success: false, data: null, error: { code: 'PACKAGE_EXPIRED', message: 'This package has expired.' }, meta: {} });
+    }
+    if (err.message.includes('Status: REVOKED')) {
+      return res.status(403).json({ success: false, data: null, error: { code: 'PACKAGE_REVOKED', message: 'This package is no longer available.' }, meta: {} });
+    }
+    next(err);
+  }
+};
+
+/**
  * Controller to handle POST /api/packages/share/:accessCode/claim (Public)
  */
 export const claimPackageHandler = async (req: Request, res: Response, next: NextFunction) => {

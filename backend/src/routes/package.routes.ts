@@ -6,6 +6,7 @@ import {
   listSenderPackagesHandler,
   revokePackageHandler,
   deletePackageHandler,
+  retrievePackageHandler,
   getPackageMetadataHandler,
   claimPackageHandler,
   downloadFileHandler
@@ -36,6 +37,9 @@ router.delete('/:id', requireAuth, deletePackageHandler);
 // ==========================================
 // Public Recipient Routes
 // ==========================================
+
+// GET /api/packages/retrieve/:accessCode - Phase 10 safe package retrieval
+router.get('/retrieve/:accessCode', retrievePackageHandler);
 
 // GET /api/packages/share/:accessCode - Check if access code is valid and active, return metadata
 router.get('/share/:accessCode', getPackageMetadataHandler);

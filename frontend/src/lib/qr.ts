@@ -8,5 +8,7 @@ export const getPackageRetrievalUrl = (accessCode: string): string => {
   const frontendUrl = configuredFrontendUrl || window.location.origin;
   const baseUrl = frontendUrl.endsWith('/') ? frontendUrl : `${frontendUrl}/`;
 
-  return new URL(`share/${encodeURIComponent(accessCode.trim().toUpperCase())}`, baseUrl).toString();
+  const retrievalUrl = new URL('verify', baseUrl);
+  retrievalUrl.searchParams.set('code', accessCode.trim().toUpperCase());
+  return retrievalUrl.toString();
 };
