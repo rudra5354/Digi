@@ -12,9 +12,11 @@ import {
   AlertCircle, 
   ShieldCheck,
   KeyRound,
-  ArrowRight
+  ArrowRight,
+  QrCode
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { PackageQrCode } from './PackageQrCode';
 
 interface CreatePackageModalProps {
   isOpen: boolean;
@@ -260,6 +262,14 @@ export const CreatePackageModal: React.FC<CreatePackageModalProps> = ({
                   <span className="text-muted block">PIN Protection:</span>
                   <span className="font-medium text-white">{createdPackage.hasPin ? 'Enabled' : 'None'}</span>
                 </div>
+              </div>
+
+              <div className="rounded-xl bg-white/5 border border-card-border p-4">
+                <div className="flex items-center justify-center gap-1.5 mb-3 text-sm font-semibold text-white">
+                  <QrCode className="h-4 w-4 text-secondary" /> Package QR Code
+                </div>
+                <p className="text-xs text-muted mb-3">Scan to open the Digi-Doc retrieval page. PIN protection still applies.</p>
+                <PackageQrCode accessCode={createdPackage.accessCode} title={createdPackage.title} size={200} />
               </div>
 
               <button

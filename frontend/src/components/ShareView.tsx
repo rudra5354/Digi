@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { 
   Package2, 
@@ -21,7 +21,8 @@ import {
   FileArchive,
   File
 } from 'lucide-react';
-import QRCode from 'qrcode';
+import { getPackageRetrievalUrl } from '../lib/qr';
+import { PackageQrCode } from './PackageQrCode';
 
 interface PackageMeta {
   id: string;
@@ -59,7 +60,6 @@ export const ShareView: React.FC = () => {
   const [copiedLink, setCopiedLink] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
 
-  const qrCanvasRef = useRef<HTMLCanvasElement>(null);
 
   // 1. Fetch Initial Metadata
   useEffect(() => {
@@ -198,28 +198,12 @@ export const ShareView: React.FC = () => {
   };
 
   // Share tools
-  const shareUrl = window.location.href;
+  const shareUrl = accessCode ? getPackageRetrievalUrl(accessCode) : window.location.href;
   const copyShareLink = () => {
     navigator.clipboard.writeText(shareUrl);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
   };
-
-  // Draw QR code canvas
-  useEffect(() => {
-    if (showQrModal && qrCanvasRef.current) {
-      QRCode.toCanvas(qrCanvasRef.current, shareUrl, {
-        width: 240,
-        margin: 2,
-        color: {
-          dark: '#0f172a',
-          light: '#ffffff'
-        }
-      }, (err) => {
-        if (err) console.error('QR code generation error:', err);
-      });
-    }
-  }, [showQrModal, shareUrl]);
 
   // Loading State UI
   if (loading) {
@@ -418,12 +402,10 @@ export const ShareView: React.FC = () => {
             <div className="mb-4">
               <Package2 className="h-8 w-8 text-primary mx-auto mb-2" />
               <h3 className="font-bold text-lg">Recipient QR Share</h3>
-              <p className="text-xs text-slate-400 mt-1">Scan to open and download files instantly on mobile.</p>
+              <p className="text-xs text-slate-400 mt-1">Scan to open the retrieval page. PIN protection still applies.</p>
             </div>
             
-            <div className="bg-white p-4 rounded-xl inline-block mx-auto mb-4 border-2 border-primary/20">
-              <canvas ref={qrCanvasRef} className="mx-auto" />
-            </div>
+            {meta && <PackageQrCode accessCode={meta.accessCode} title={meta.title} size={220} />}
 
             <div className="bg-slate-950 p-2.5 rounded-lg border border-card-border flex items-center justify-between text-xs font-mono">
               <span className="truncate text-left select-all pr-4">{shareUrl}</span>

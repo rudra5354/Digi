@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { 
   Package2, 
@@ -23,7 +23,8 @@ import { supabase } from './lib/supabase';
 import { User } from '@supabase/supabase-js';
 import { CreatePackageModal } from './components/CreatePackageModal';
 import { ShareView } from './components/ShareView';
-import QRCode from 'qrcode';
+import { PackageQrCode } from './components/PackageQrCode';
+import { getPackageRetrievalUrl } from './lib/qr';
 
 interface NavigationProps {
   user: User | null;
@@ -200,6 +201,7 @@ function Dashboard({ user, loading, onOpenCreateModal, refreshTrigger }: Dashboa
   const [fetchingPackages, setFetchingPackages] = useState(true);
   const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
   const [activeQrUrl, setActiveQrUrl] = useState<string | null>(null);
+  const [activeQrCode, setActiveQrCode] = useState<string | null>(null);
   const [activeQrTitle, setActiveQrTitle] = useState<string | null>(null);
   
   // Revoke/Delete action states
@@ -207,8 +209,6 @@ function Dashboard({ user, loading, onOpenCreateModal, refreshTrigger }: Dashboa
   const [actionType, setActionType] = useState<'REVOKE' | 'DELETE' | null>(null);
   const [isActionSubmitting, setIsActionSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-
-  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Fetch packages on mount and trigger
   const fetchPackages = async () => {
@@ -241,22 +241,6 @@ function Dashboard({ user, loading, onOpenCreateModal, refreshTrigger }: Dashboa
     }
   }, [user, loading, refreshTrigger]);
 
-  // Generate QR Code canvas in modal
-  useEffect(() => {
-    if (activeQrUrl && canvasRef.current) {
-      QRCode.toCanvas(canvasRef.current, activeQrUrl, {
-        width: 220,
-        margin: 2,
-        color: {
-          dark: '#0f172a',
-          light: '#ffffff',
-        },
-      }, (err) => {
-        if (err) console.error('Dashboard QR generation error:', err);
-      });
-    }
-  }, [activeQrUrl]);
-
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center mt-32 gap-3 text-muted">
@@ -269,15 +253,16 @@ function Dashboard({ user, loading, onOpenCreateModal, refreshTrigger }: Dashboa
   if (!user) return null;
 
   const copyAccessCode = (pkg: any) => {
-    const shareUrl = `${window.location.origin}/share/${pkg.accessCode}`;
+    const shareUrl = getPackageRetrievalUrl(pkg.accessCode);
     navigator.clipboard.writeText(shareUrl);
     setCopiedCodeId(pkg.id);
     setTimeout(() => setCopiedCodeId(null), 2000);
   };
 
   const handleOpenQr = (pkg: any) => {
-    const shareUrl = `${window.location.origin}/share/${pkg.accessCode}`;
+    const shareUrl = getPackageRetrievalUrl(pkg.accessCode);
     setActiveQrUrl(shareUrl);
+    setActiveQrCode(pkg.accessCode);
     setActiveQrTitle(pkg.title);
   };
 
@@ -381,7 +366,7 @@ function Dashboard({ user, loading, onOpenCreateModal, refreshTrigger }: Dashboa
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {packages.map((pkg) => {
             const isPkgActive = pkg.status.toUpperCase() === 'ACTIVE';
-            const shareUrl = `${window.location.origin}/share/${pkg.accessCode}`;
+            const shareUrl = getPackageRetrievalUrl(pkg.accessCode);
             return (
               <div key={pkg.id} className="glass-panel border border-card-border rounded-xl p-5 flex flex-col justify-between hover:border-white/15 transition-all shadow-glass hover:shadow-glass-sm relative overflow-hidden group">
                 {/* Header Info */}
@@ -492,6 +477,7 @@ function Dashboard({ user, loading, onOpenCreateModal, refreshTrigger }: Dashboa
             <button 
               onClick={() => {
                 setActiveQrUrl(null);
+                setActiveQrCode(null);
                 setActiveQrTitle(null);
               }}
               className="absolute top-4 right-4 p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
@@ -506,9 +492,7 @@ function Dashboard({ user, loading, onOpenCreateModal, refreshTrigger }: Dashboa
               </p>
             </div>
             
-            <div className="bg-white p-4 rounded-xl inline-block mx-auto mb-4 border-2 border-primary/20">
-              <canvas ref={canvasRef} className="mx-auto" />
-            </div>
+            {activeQrCode && <PackageQrCode accessCode={activeQrCode} title={activeQrTitle || 'package'} />}
 
             <div className="bg-slate-950 p-2.5 rounded-lg border border-card-border flex items-center justify-between text-xs font-mono">
               <span className="truncate text-left select-all pr-4">{activeQrUrl}</span>
