@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { requireAuth } from '../middleware/auth';
 import { 
   createPackageHandler, 
@@ -7,6 +8,7 @@ import {
   revokePackageHandler,
   deletePackageHandler,
   retrievePackageHandler,
+  verifyPackagePinHandler,
   getPackageMetadataHandler,
   claimPackageHandler,
   downloadFileHandler
@@ -14,6 +16,20 @@ import {
 import { uploadMiddleware } from '../middleware/upload';
 
 const router = Router();
+
+const pinVerificationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    data: null,
+    error: { code: 'TOO_MANY_PIN_ATTEMPTS', message: 'Too many PIN attempts. Please try again later.' },
+    meta: {},
+  },
+});
 
 // ==========================================
 // Protected Sender Routes
@@ -40,6 +56,9 @@ router.delete('/:id', requireAuth, deletePackageHandler);
 
 // GET /api/packages/retrieve/:accessCode - Phase 10 safe package retrieval
 router.get('/retrieve/:accessCode', retrievePackageHandler);
+
+// POST /api/packages/:packageId/verify-pin - Phase 11 verification only
+router.post('/:packageId/verify-pin', pinVerificationLimiter, verifyPackagePinHandler);
 
 // GET /api/packages/share/:accessCode - Check if access code is valid and active, return metadata
 router.get('/share/:accessCode', getPackageMetadataHandler);

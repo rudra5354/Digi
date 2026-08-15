@@ -20,6 +20,10 @@ export const VerifyPackage = () => {
   const [code, setCode] = useState(initialCode);
   const [packageInfo, setPackageInfo] = useState<RetrievedPackage | null>(null);
   const [loading, setLoading] = useState(false);
+  const [verifyingPin, setVerifyingPin] = useState(false);
+  const [pin, setPin] = useState('');
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [pinVerified, setPinVerified] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const retrievePackage = async (submittedCode: string) => {
@@ -40,6 +44,9 @@ export const VerifyPackage = () => {
         throw new Error(result.error?.message || 'Unable to retrieve this package.');
       }
       setPackageInfo(result.data);
+      setPin('');
+      setPinError(null);
+      setPinVerified(false);
     } catch (requestError: any) {
       setError(requestError.message || 'Unable to retrieve this package.');
     } finally {
@@ -54,6 +61,35 @@ export const VerifyPackage = () => {
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
     retrievePackage(code);
+  };
+
+  const handlePinSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!packageInfo) return;
+    if (!/^\d{4,8}$/.test(pin)) {
+      setPinError('PIN must be 4 to 8 numeric digits.');
+      return;
+    }
+
+    setVerifyingPin(true);
+    setPinError(null);
+    try {
+      const response = await fetch(`/api/packages/${packageInfo.id}/verify-pin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error?.message || 'PIN verification failed.');
+      }
+      setPinVerified(true);
+      setPin('');
+    } catch (verificationError: any) {
+      setPinError(verificationError.message || 'PIN verification failed.');
+    } finally {
+      setVerifyingPin(false);
+    }
   };
 
   return (
@@ -86,7 +122,26 @@ export const VerifyPackage = () => {
           <h2 className="text-lg font-bold text-white">{packageInfo.title}</h2>
           <p className="text-xs text-muted flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" /> Expires {new Date(packageInfo.expiresAt).toLocaleString()}</p>
           <p className="text-xs text-muted">{packageInfo.fileCount} attachment{packageInfo.fileCount === 1 ? '' : 's'}</p>
-          <p className="text-xs text-muted flex items-center gap-1.5"><KeyRound className="h-3.5 w-3.5" /> {packageInfo.hasPin ? 'PIN verification is required before access.' : 'Further access will be available in the next verification stage.'}</p>
+          {packageInfo.hasPin && !pinVerified && (
+            <form onSubmit={handlePinSubmit} className="pt-2 space-y-2">
+              <label className="text-xs text-muted flex items-center gap-1.5"><KeyRound className="h-3.5 w-3.5" /> Enter the recipient PIN to continue.</label>
+              <input
+                type="password"
+                inputMode="numeric"
+                maxLength={8}
+                value={pin}
+                onChange={(event) => setPin(event.target.value.replace(/\D/g, ''))}
+                placeholder="4–8 digit PIN"
+                className="w-full h-10 bg-black/40 border border-card-border rounded-lg px-3 text-center font-mono tracking-widest text-white placeholder-slate-600 focus:outline-none focus:border-primary/50"
+              />
+              {pinError && <p className="text-xs text-red-400">{pinError}</p>}
+              <button type="submit" disabled={verifyingPin} className="w-full h-10 bg-primary hover:bg-primary-hover disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-2">
+                {verifyingPin ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Verifying…</> : 'Verify PIN'}
+              </button>
+            </form>
+          )}
+          {packageInfo.hasPin && pinVerified && <p className="text-xs text-emerald-400 flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5" /> PIN verified. You may proceed when package preview becomes available.</p>}
+          {!packageInfo.hasPin && <p className="text-xs text-muted flex items-center gap-1.5"><KeyRound className="h-3.5 w-3.5" /> No PIN is required. Package preview will be available in the next stage.</p>}
         </div>
       )}
     </div>

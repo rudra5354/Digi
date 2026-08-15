@@ -381,6 +381,73 @@ export const claimPackage = async (
 };
 
 /**
+ * Verifies a recipient PIN without exposing package files or storage details.
+ * This is intentionally separate from the later claim/download operations.
+ */
+export const verifyPackagePin = async (
+  packageId: string,
+  pin: string,
+  clientIp?: string,
+  userAgent?: string
+): Promise<{ verified: true; pinRequired: boolean }> => {
+  const { data: pkg, error } = await supabase
+    .from('packages')
+    .select('id, pin_hash, status, expires_at')
+    .eq('id', packageId)
+    .single();
+
+  if (error || !pkg) {
+    throw new Error('Package not found.');
+  }
+
+  const isExpired = new Date(pkg.expires_at) < new Date();
+  if (isExpired && pkg.status === 'ACTIVE') {
+    await supabase.from('packages').update({ status: 'EXPIRED' }).eq('id', pkg.id);
+    pkg.status = 'EXPIRED';
+  }
+
+  if (pkg.status !== 'ACTIVE') {
+    throw new Error(`Package is no longer active (Status: ${pkg.status}).`);
+  }
+
+  // A PIN-less package should not be challenged. The frontend skips this route,
+  // but this response keeps the endpoint safe if it is called directly.
+  if (!pkg.pin_hash) {
+    return { verified: true, pinRequired: false };
+  }
+
+  if (!verifyPin(pin, pkg.pin_hash)) {
+    try {
+      await supabase.from('package_access_logs').insert({
+        package_id: pkg.id,
+        access_type: 'AUTH_FAIL',
+        status: 'FAILED',
+        ip_address: clientIp || null,
+        user_agent: userAgent || null,
+        error_reason: 'Invalid PIN',
+      });
+    } catch (logError: any) {
+      console.warn('Non-blocking PIN failure log failed:', logError.message);
+    }
+    throw new Error('INVALID_PIN');
+  }
+
+  try {
+    await supabase.from('package_access_logs').insert({
+      package_id: pkg.id,
+      access_type: 'VERIFY',
+      status: 'SUCCESS',
+      ip_address: clientIp || null,
+      user_agent: userAgent || null,
+    });
+  } catch (logError: any) {
+    console.warn('Non-blocking PIN verification log failed:', logError.message);
+  }
+
+  return { verified: true, pinRequired: true };
+};
+
+/**
  * Initiates download of a specific file: verifies pin, increments download counter, 
  * logs the access event, and returns file path.
  */

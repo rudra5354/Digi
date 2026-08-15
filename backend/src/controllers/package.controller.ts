@@ -4,6 +4,7 @@ import {
   createPackage, 
   addFilesToPackage,
   getPackageMetadataByAccessCode,
+  verifyPackagePin,
   claimPackage,
   downloadPackageFile,
   getPackagesBySender,
@@ -28,6 +29,10 @@ const createPackageSchema = z.object({
     .regex(/^\d{4,8}$/, 'PIN must be 4 to 8 digits')
     .optional()
     .or(z.literal('')),
+});
+
+const verifyPinSchema = z.object({
+  pin: z.string().regex(/^\d{4,8}$/, 'PIN must be 4 to 8 numeric digits'),
 });
 
 /**
@@ -370,6 +375,58 @@ export const retrievePackageHandler = async (req: Request, res: Response, next: 
   } catch (err: any) {
     if (err.message === 'Package not found.') {
       return res.status(404).json({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Package not found.' }, meta: {} });
+    }
+    if (err.message.includes('Status: EXPIRED')) {
+      return res.status(410).json({ success: false, data: null, error: { code: 'PACKAGE_EXPIRED', message: 'This package has expired.' }, meta: {} });
+    }
+    if (err.message.includes('Status: REVOKED')) {
+      return res.status(403).json({ success: false, data: null, error: { code: 'PACKAGE_REVOKED', message: 'This package is no longer available.' }, meta: {} });
+    }
+    next(err);
+  }
+};
+
+/**
+ * Controller for Phase 11 PIN verification. It never claims a package or
+ * returns its files; it only establishes that the submitted PIN is valid.
+ */
+export const verifyPackagePinHandler = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { packageId } = req.params;
+    const validationResult = verifyPinSchema.safeParse(req.body);
+
+    if (!packageId || !z.string().uuid().safeParse(packageId).success) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        error: { code: 'INVALID_PACKAGE_ID', message: 'A valid package ID is required.' },
+        meta: {},
+      });
+    }
+
+    if (!validationResult.success) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        error: { code: 'INVALID_PIN_FORMAT', message: 'PIN must be 4 to 8 numeric digits.' },
+        meta: {},
+      });
+    }
+
+    const result = await verifyPackagePin(
+      packageId,
+      validationResult.data.pin,
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    return res.status(200).json({ success: true, data: result, error: null, meta: {} });
+  } catch (err: any) {
+    if (err.message === 'Package not found.') {
+      return res.status(404).json({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Package not found.' }, meta: {} });
+    }
+    if (err.message === 'INVALID_PIN') {
+      return res.status(401).json({ success: false, data: null, error: { code: 'INVALID_PIN', message: 'The PIN is incorrect.' }, meta: {} });
     }
     if (err.message.includes('Status: EXPIRED')) {
       return res.status(410).json({ success: false, data: null, error: { code: 'PACKAGE_EXPIRED', message: 'This package has expired.' }, meta: {} });
