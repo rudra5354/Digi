@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Activity, FileStack, Loader2, RefreshCw, Search, ShieldCheck, Users } from 'lucide-react';
 import { User } from '@supabase/supabase-js';

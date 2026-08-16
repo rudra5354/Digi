@@ -33,6 +33,21 @@ const pinVerificationLimiter = rateLimit({
   },
 });
 
+// Download requests can trigger signed URL generation. Limit attempts to reduce
+// brute-force PIN guessing and signed-link abuse while allowing normal use.
+const downloadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    data: null,
+    error: { code: 'TOO_MANY_DOWNLOAD_ATTEMPTS', message: 'Too many download attempts. Please try again later.' },
+    meta: {},
+  },
+});
+
 // ==========================================
 // Protected Sender Routes
 // ==========================================
@@ -66,7 +81,7 @@ router.post('/:packageId/verify-pin', pinVerificationLimiter, verifyPackagePinHa
 router.get('/:packageId/preview', getPackagePreviewHandler);
 
 // POST /api/packages/:packageId/files/:fileId/download - authorized individual download
-router.post('/:packageId/files/:fileId/download', createPreviewDownloadHandler);
+router.post('/:packageId/files/:fileId/download', downloadLimiter, createPreviewDownloadHandler);
 
 // GET /api/packages/share/:accessCode - Check if access code is valid and active, return metadata
 router.get('/share/:accessCode', getPackageMetadataHandler);
@@ -75,6 +90,6 @@ router.get('/share/:accessCode', getPackageMetadataHandler);
 router.post('/share/:accessCode/claim', claimPackageHandler);
 
 // GET /api/packages/share/:accessCode/files/:fileId/download - Redirect to secure download URL
-router.get('/share/:accessCode/files/:fileId/download', downloadFileHandler);
+router.get('/share/:accessCode/files/:fileId/download', downloadLimiter, downloadFileHandler);
 
 export default router;

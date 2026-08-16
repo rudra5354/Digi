@@ -34,6 +34,7 @@ export const PackagePreview = ({ packageId, previewToken }: PackagePreviewProps)
   const [activeFile, setActiveFile] = useState<PreviewFile | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [downloadedFile, setDownloadedFile] = useState<string | null>(null);
 
   useEffect(() => {
     const loadPreviews = async () => {
@@ -50,7 +51,7 @@ export const PackagePreview = ({ packageId, previewToken }: PackagePreviewProps)
   }, [packageId, previewToken]);
 
   const downloadFile = async (file: PreviewFile) => {
-    setDownloadingId(file.id); setDownloadError(null);
+    setDownloadingId(file.id); setDownloadError(null); setDownloadedFile(null);
     try {
       const response = await fetch(`/api/packages/${packageId}/files/${file.id}/download`, { method: 'POST', headers: { Authorization: `Bearer ${previewToken}` } });
       const result = await response.json();
@@ -58,6 +59,7 @@ export const PackagePreview = ({ packageId, previewToken }: PackagePreviewProps)
       const link = document.createElement('a');
       link.href = result.data.downloadUrl; link.download = file.fileName;
       document.body.appendChild(link); link.click(); link.remove();
+      setDownloadedFile(file.fileName);
     } catch { setDownloadError('Unable to download file. Please try again.'); }
     finally { setDownloadingId(null); }
   };
@@ -79,6 +81,7 @@ export const PackagePreview = ({ packageId, previewToken }: PackagePreviewProps)
   return <section className="mt-6 space-y-4">
     <h2 className="text-sm font-semibold uppercase tracking-wider text-muted">Secure file preview ({files.length})</h2>
     {downloadError && <div className="p-3 text-sm text-red-300 bg-red-950/40 border border-red-500/25 rounded-lg">{downloadError}</div>}
+    {downloadedFile && <div className="p-3 text-sm text-emerald-300 bg-emerald-950/40 border border-emerald-500/25 rounded-lg">Download started for {downloadedFile}.</div>}
     {files.length === 0 ? <div className="p-5 rounded-xl glass-panel text-sm text-muted">This package has no files to preview.</div> : files.map((file) => <article key={file.id} className="rounded-xl glass-panel border border-card-border overflow-hidden">
       <div className="p-4 flex items-center gap-3"><FileIcon kind={file.previewKind} /><div className="min-w-0"><p className="text-sm font-medium text-white truncate">{file.fileName}</p><p className="text-xs text-muted">{file.mimeType} · {formatBytes(file.fileSize)}</p></div></div>
       <div className="border-y border-card-border">{renderPreview(file)}</div>

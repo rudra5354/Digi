@@ -602,7 +602,7 @@ export const downloadFileHandler = async (req: Request, res: Response, next: Nex
     const normalizedCode = accessCode.trim().replace(/\s+/g, '');
     const pinString = pin ? String(pin) : undefined;
 
-    const { filePath } = await downloadPackageFile(
+    const { filePath, fileName } = await downloadPackageFile(
       normalizedCode,
       fileId,
       pinString,
@@ -611,7 +611,7 @@ export const downloadFileHandler = async (req: Request, res: Response, next: Nex
     );
 
     // Generate signed download URL valid for 60 seconds
-    const { signedUrl, error: signError } = await generateSignedDownloadUrl(filePath, 60);
+    const { signedUrl, error: signError } = await generateSignedDownloadUrl(filePath, 60, fileName);
 
     if (signError || !signedUrl) {
       throw signError || new Error('Failed to generate download path.');
