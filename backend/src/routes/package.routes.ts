@@ -9,6 +9,8 @@ import {
   deletePackageHandler,
   retrievePackageHandler,
   verifyPackagePinHandler,
+  getPackagePreviewHandler,
+  createPreviewDownloadHandler,
   getPackageMetadataHandler,
   claimPackageHandler,
   downloadFileHandler
@@ -59,6 +61,12 @@ router.get('/retrieve/:accessCode', retrievePackageHandler);
 
 // POST /api/packages/:packageId/verify-pin - Phase 11 verification only
 router.post('/:packageId/verify-pin', pinVerificationLimiter, verifyPackagePinHandler);
+
+// GET /api/packages/:packageId/preview - Phase 12 authorized file previews
+router.get('/:packageId/preview', getPackagePreviewHandler);
+
+// POST /api/packages/:packageId/files/:fileId/download - authorized individual download
+router.post('/:packageId/files/:fileId/download', createPreviewDownloadHandler);
 
 // GET /api/packages/share/:accessCode - Check if access code is valid and active, return metadata
 router.get('/share/:accessCode', getPackageMetadataHandler);

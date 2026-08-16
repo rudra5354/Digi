@@ -77,12 +77,13 @@ export const uploadFileToStorage = async (
  */
 export const generateSignedDownloadUrl = async (
   filePath: string,
-  expiresInSeconds: number = 60
+  expiresInSeconds: number = 60,
+  downloadFileName?: string
 ): Promise<{ signedUrl: string | null; error: Error | null }> => {
   try {
     const { data, error } = await supabase.storage
       .from(BUCKET_NAME)
-      .createSignedUrl(filePath, expiresInSeconds);
+      .createSignedUrl(filePath, expiresInSeconds, downloadFileName ? { download: downloadFileName } : undefined);
 
     if (error || !data?.signedUrl) {
       console.error('Failed to generate signed download URL:', error?.message);

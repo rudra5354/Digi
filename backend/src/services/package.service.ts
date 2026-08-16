@@ -1,7 +1,9 @@
 import { supabase } from './supabase';
 import { generateAccessCode, hashPin, verifyPin } from '../utils/crypto';
-import { uploadFileToStorage, deleteFileFromStorage, deletePackageFilesFromStorage } from './storage';
+import { uploadFileToStorage, deleteFileFromStorage, deletePackageFilesFromStorage, generateSignedDownloadUrl } from './storage';
+import { config } from '../config';
 import crypto from 'crypto';
+import jwt, { JwtPayload } from 'jsonwebtoken';
 
 export interface CreatePackageDTO {
   senderId: string;
@@ -23,6 +25,60 @@ export interface PackageResponse {
   downloadCount: number;
   createdAt: string;
 }
+
+const PREVIEW_TOKEN_TTL_SECONDS = 5 * 60;
+
+const createPreviewSessionToken = (packageId: string): string => jwt.sign(
+  { packageId, purpose: 'PACKAGE_PREVIEW' },
+  config.JWT_SECRET,
+  { expiresIn: PREVIEW_TOKEN_TTL_SECONDS }
+);
+
+const hasValidPreviewSession = (token: string | undefined, packageId: string): boolean => {
+  if (!token) return false;
+  try {
+    const payload = jwt.verify(token, config.JWT_SECRET) as JwtPayload;
+    return payload.packageId === packageId && payload.purpose === 'PACKAGE_PREVIEW';
+  } catch {
+    return false;
+  }
+};
+
+export interface PreviewFileResponse {
+  id: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  previewKind: 'image' | 'pdf' | 'video' | 'audio' | 'text' | 'office' | 'unavailable';
+  previewAvailable: boolean;
+  previewUrl?: string;
+  previewMessage?: string;
+}
+
+type PreviewKind = PreviewFileResponse['previewKind'];
+const TEXT_PREVIEW_MAX_BYTES = 1024 * 1024;
+
+const getPreviewKind = (mimeType: string, fileName: string): PreviewKind => {
+  const mime = mimeType.toLowerCase().split(';')[0].trim();
+  const extension = fileName.toLowerCase().split('.').pop() || '';
+
+  if (['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'].includes(mime)) return 'image';
+  if (mime === 'application/pdf') return 'pdf';
+  if (['video/mp4', 'video/webm', 'video/ogg'].includes(mime)) return 'video';
+  if (['audio/mpeg', 'audio/wav', 'audio/ogg'].includes(mime)) return 'audio';
+  if (['text/plain', 'text/csv', 'application/json'].includes(mime)) return 'text';
+  if (['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'].includes(mime)) return 'office';
+
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(extension)) return 'image';
+  if (extension === 'pdf') return 'pdf';
+  if (['mp4', 'webm', 'ogv'].includes(extension)) return 'video';
+  if (['mp3', 'wav'].includes(extension)) return 'audio';
+  if (['txt', 'csv', 'json'].includes(extension)) return 'text';
+  if (['docx', 'xlsx', 'pptx'].includes(extension)) return 'office';
+  return 'unavailable';
+};
+
+export const createPreviewSession = (packageId: string): string => createPreviewSessionToken(packageId);
 
 /**
  * Creates a new temporary delivery package in the database.
@@ -389,7 +445,7 @@ export const verifyPackagePin = async (
   pin: string,
   clientIp?: string,
   userAgent?: string
-): Promise<{ verified: true; pinRequired: boolean }> => {
+): Promise<{ verified: true; pinRequired: boolean; previewToken: string }> => {
   const { data: pkg, error } = await supabase
     .from('packages')
     .select('id, pin_hash, status, expires_at')
@@ -413,7 +469,7 @@ export const verifyPackagePin = async (
   // A PIN-less package should not be challenged. The frontend skips this route,
   // but this response keeps the endpoint safe if it is called directly.
   if (!pkg.pin_hash) {
-    return { verified: true, pinRequired: false };
+    return { verified: true, pinRequired: false, previewToken: createPreviewSessionToken(pkg.id) };
   }
 
   if (!verifyPin(pin, pkg.pin_hash)) {
@@ -444,7 +500,132 @@ export const verifyPackagePin = async (
     console.warn('Non-blocking PIN verification log failed:', logError.message);
   }
 
-  return { verified: true, pinRequired: true };
+  return { verified: true, pinRequired: true, previewToken: createPreviewSessionToken(pkg.id) };
+};
+
+/**
+ * Returns safe file metadata and 60-second URLs only for PDF/image previews.
+ * A signed preview session and an active package are required on every call.
+ */
+export const getPackagePreviewFiles = async (
+  packageId: string,
+  previewToken: string | undefined,
+  clientIp?: string,
+  userAgent?: string
+): Promise<PreviewFileResponse[]> => {
+  const { data: pkg, error: packageError } = await supabase
+    .from('packages')
+    .select('id, status, expires_at')
+    .eq('id', packageId)
+    .single();
+
+  if (packageError || !pkg) throw new Error('Package not found.');
+  if (new Date(pkg.expires_at) < new Date() && pkg.status === 'ACTIVE') {
+    await supabase.from('packages').update({ status: 'EXPIRED' }).eq('id', pkg.id);
+    pkg.status = 'EXPIRED';
+  }
+  if (pkg.status !== 'ACTIVE') throw new Error(`Package is no longer active (Status: ${pkg.status}).`);
+  if (!hasValidPreviewSession(previewToken, pkg.id)) throw new Error('PREVIEW_NOT_AUTHORIZED');
+
+  const { data: files, error: filesError } = await supabase
+    .from('package_files')
+    .select('id, file_name, file_size, mime_type, file_path')
+    .eq('package_id', pkg.id)
+    .order('created_at', { ascending: true });
+
+  if (filesError) throw new Error('Failed to retrieve package files.');
+
+  const previewFiles = await Promise.all((files || []).map(async (file): Promise<PreviewFileResponse> => {
+    const previewKind = getPreviewKind(file.mime_type, file.file_name);
+    const safeFile: PreviewFileResponse = {
+      id: file.id,
+      fileName: file.file_name,
+      fileSize: Number(file.file_size),
+      mimeType: file.mime_type,
+      previewKind,
+      previewAvailable: false,
+    };
+
+    if (previewKind === 'office') {
+      return { ...safeFile, previewMessage: 'Preview unavailable: secure office conversion is not configured.' };
+    }
+    if (previewKind === 'unavailable') return safeFile;
+    if (previewKind === 'text' && Number(file.file_size) > TEXT_PREVIEW_MAX_BYTES) {
+      return { ...safeFile, previewMessage: 'Preview unavailable: text files over 1 MB are not displayed.' };
+    }
+
+    const { signedUrl } = await generateSignedDownloadUrl(file.file_path, 60);
+    return signedUrl ? { ...safeFile, previewAvailable: true, previewUrl: signedUrl } : safeFile;
+  }));
+
+  try {
+    await supabase.from('package_access_logs').insert({
+      package_id: pkg.id,
+      access_type: 'VERIFY',
+      status: 'SUCCESS',
+      ip_address: clientIp || null,
+      user_agent: userAgent || null,
+    });
+  } catch (logError: any) {
+    console.warn('Non-blocking package preview log failed:', logError.message);
+  }
+
+  return previewFiles;
+};
+
+/**
+ * Authorizes one file for download using the same short-lived preview session.
+ * The storage path remains internal and is never included in an API response.
+ */
+export const getAuthorizedPreviewFile = async (
+  packageId: string,
+  fileId: string,
+  previewToken: string | undefined
+): Promise<{ filePath: string; fileName: string }> => {
+  const { data: pkg, error: packageError } = await supabase
+    .from('packages')
+    .select('id, status, expires_at')
+    .eq('id', packageId)
+    .single();
+
+  if (packageError || !pkg) throw new Error('Package not found.');
+  if (new Date(pkg.expires_at) < new Date() && pkg.status === 'ACTIVE') {
+    await supabase.from('packages').update({ status: 'EXPIRED' }).eq('id', pkg.id);
+    pkg.status = 'EXPIRED';
+  }
+  if (pkg.status !== 'ACTIVE') throw new Error(`Package is no longer active (Status: ${pkg.status}).`);
+  if (!hasValidPreviewSession(previewToken, pkg.id)) throw new Error('PREVIEW_NOT_AUTHORIZED');
+
+  const { data: file, error: fileError } = await supabase
+    .from('package_files')
+    .select('file_path, file_name')
+    .eq('id', fileId)
+    .eq('package_id', pkg.id)
+    .single();
+
+  if (fileError || !file) throw new Error('File not found in this package.');
+  return { filePath: file.file_path, fileName: file.file_name };
+};
+
+/** Records an authorized per-file download without recording any file path. */
+export const recordPreviewDownload = async (
+  packageId: string,
+  clientIp?: string,
+  userAgent?: string
+): Promise<void> => {
+  try {
+    const { data: pkg } = await supabase.from('packages').select('download_count').eq('id', packageId).single();
+    if (pkg) await supabase.from('packages').update({ download_count: pkg.download_count + 1 }).eq('id', packageId);
+    await supabase.from('package_access_logs').insert({
+      package_id: packageId,
+      access_type: 'DOWNLOAD',
+      status: 'SUCCESS',
+      ip_address: clientIp || null,
+      user_agent: userAgent || null,
+    });
+  } catch (logError: any) {
+    console.warn('Non-blocking preview download log failed:', logError.message);
+  }
 };
 
 /**

@@ -17,7 +17,9 @@ import {
   Clock, 
   Files, 
   DownloadCloud, 
-  X 
+  X,
+  ScanLine,
+  KeyRound
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { User } from '@supabase/supabase-js';
@@ -25,7 +27,9 @@ import { CreatePackageModal } from './components/CreatePackageModal';
 import { ShareView } from './components/ShareView';
 import { VerifyPackage } from './components/VerifyPackage';
 import { PackageQrCode } from './components/PackageQrCode';
+import { AdminDashboard } from './components/AdminDashboard';
 import { getPackageRetrievalUrl } from './lib/qr';
+import { AboutPage, AuthCallback, ContactPage, DocumentDetailsPage, DocumentsPage, FaqPage, ForgotPassword, HowItWorksPage, LandingPage, LegalPage, ProfilePage, UploadPage } from './components/SitePages';
 
 interface NavigationProps {
   user: User | null;
@@ -34,23 +38,27 @@ interface NavigationProps {
 }
 
 function Navigation({ user, onLogout, onOpenCreateModal }: NavigationProps) {
+  const adminMetadata = user?.app_metadata as { role?: string; roles?: string[] } | undefined;
+  const isAdmin = adminMetadata?.role === 'admin' || adminMetadata?.roles?.includes('admin') === true;
   return (
-    <header className="sticky top-0 z-50 w-full glass-panel border-b border-card-border bg-[#0a0a0c]/80 backdrop-blur-md">
+    <header className="sticky top-0 z-50 w-full border-b border-card-border bg-background/95 backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2 font-semibold text-xl tracking-tight text-white hover:opacity-90 transition-opacity">
-          <Package2 className="h-6 w-6 text-primary" />
-          <span className="font-heading">Digi<span className="text-secondary font-bold">Doc</span></span>
+          <QrCode className="h-6 w-6 text-primary" />
+          <span className="font-heading font-bold">Digi-Doc</span>
         </Link>
         <nav className="flex items-center gap-6">
-          <Link to="/" className="text-sm font-medium text-muted hover:text-white transition-colors">Verify Package</Link>
+          <Link to="/how-it-works" className="text-sm font-medium text-muted hover:text-white transition-colors">How it works</Link>
+          <Link to="/verify" className="text-sm font-medium text-muted hover:text-white transition-colors">Have a code?</Link>
           {user ? (
             <>
               <Link to="/dashboard" className="flex items-center gap-1.5 text-sm font-medium text-muted hover:text-white transition-colors">
                 <LayoutDashboard className="h-4 w-4" /> Dashboard
               </Link>
+              {isAdmin && <Link to="/admin" className="text-sm font-medium text-muted hover:text-white transition-colors">Admin</Link>}
               <button 
                 onClick={onOpenCreateModal}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold bg-secondary hover:bg-secondary-hover text-black rounded-md transition-colors shadow-glow-cyan"
+                className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold bg-primary hover:bg-primary-hover text-white rounded-md transition-colors"
               >
                 <Plus className="h-3.5 w-3.5" /> Create Package
               </button>
@@ -67,8 +75,8 @@ function Navigation({ user, onLogout, onOpenCreateModal }: NavigationProps) {
               </div>
             </>
           ) : (
-            <Link to="/login" className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-primary hover:bg-primary-hover text-white rounded-md transition-colors shadow-glow-indigo">
-              <Lock className="h-3.5 w-3.5" /> Sender Login
+            <Link to="/login" className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-primary hover:bg-primary-hover text-white rounded-md transition-colors">
+              <Lock className="h-3.5 w-3.5" /> Send a package
             </Link>
           )}
         </nav>
@@ -106,14 +114,15 @@ function Home() {
   };
 
   return (
-    <div className="max-w-md mx-auto mt-20 p-8 rounded-2xl glass-panel shadow-glass text-center border border-card-border animate-fade-in">
-      <div className="h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-primary/20">
-        <Package2 className="h-8 w-8 text-primary animate-pulse-glow" />
+    <div className="industrial-grid max-w-5xl mx-auto mt-10 sm:mt-16 p-6 sm:p-12 rounded-3xl glass-panel shadow-glass border border-card-border animate-fade-in">
+      <div className="eyebrow w-fit mx-auto mb-6"><ScanLine className="h-3.5 w-3.5 text-primary" /> Scan. Preview. Download. Gone.</div>
+      <div className="h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-primary/30">
+        <QrCode className="h-8 w-8 text-primary" />
       </div>
-      <h1 className="text-2xl font-bold tracking-tight text-white mb-2">Claim Your Package</h1>
-      <p className="text-sm text-muted mb-6">Enter an 8-character Access Code to retrieve secure package details.</p>
+      <h1 className="font-heading text-3xl sm:text-4xl font-bold tracking-tight text-white mb-3">Open a shared package</h1>
+      <p className="max-w-lg mx-auto text-sm sm:text-base text-muted mb-8">Scan a Digi-Doc QR code or enter the access code supplied by the sender. Protected packages ask for their PIN before files are shown.</p>
       
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="max-w-md mx-auto space-y-4">
         <div className="relative">
           <input 
             type="text" 
@@ -121,16 +130,17 @@ function Home() {
             maxLength={9}
             value={code}
             onChange={handleInputChange}
-            className="w-full h-12 bg-black/40 border border-card-border rounded-lg px-4 text-center font-mono text-lg tracking-widest text-white placeholder-slate-600 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all uppercase"
+            className="w-full h-12 bg-background border border-card-border rounded-lg px-4 text-center font-mono text-lg tracking-widest text-white placeholder-slate-600 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all uppercase"
           />
         </div>
         {error && (
           <p className="text-red-400 text-xs mt-1 text-left">⚠️ {error}</p>
         )}
-        <button type="submit" className="w-full h-11 bg-primary hover:bg-primary-hover text-white font-medium rounded-lg transition-all shadow-glow-indigo">
-          Claim Package
+        <button type="submit" className="w-full h-11 bg-primary hover:bg-primary-hover text-white font-semibold rounded-lg transition-all">
+          Open package
         </button>
       </form>
+      <div className="mt-10 grid gap-3 text-left sm:grid-cols-3"><div className="rounded-xl border border-card-border bg-background/70 p-4"><Package2 className="h-5 w-5 text-primary" /><p className="mt-3 text-sm font-semibold text-white">One package</p><p className="mt-1 text-xs text-muted">All files under one code.</p></div><div className="rounded-xl border border-card-border bg-background/70 p-4"><KeyRound className="h-5 w-5 text-primary" /><p className="mt-3 text-sm font-semibold text-white">Optional PIN</p><p className="mt-1 text-xs text-muted">Protection when needed.</p></div><div className="rounded-xl border border-card-border bg-background/70 p-4"><Clock className="h-5 w-5 text-primary" /><p className="mt-3 text-sm font-semibold text-white">Auto expiry</p><p className="mt-1 text-xs text-muted">Packages disappear on time.</p></div></div>
     </div>
   );
 }
@@ -348,7 +358,7 @@ function Dashboard({ user, loading, onOpenCreateModal, refreshTrigger }: Dashboa
         </div>
         <button 
           onClick={onOpenCreateModal}
-          className="h-10 px-4 bg-secondary hover:bg-secondary-hover text-black font-semibold rounded-lg transition-colors shadow-glow-cyan text-sm flex items-center gap-1.5 shrink-0"
+          className="h-10 px-4 bg-primary hover:bg-primary-hover text-white font-semibold rounded-lg transition-colors text-sm flex items-center gap-1.5 shrink-0"
         >
           <Plus className="h-4 w-4" /> Create Package
         </button>
@@ -381,7 +391,7 @@ function Dashboard({ user, loading, onOpenCreateModal, refreshTrigger }: Dashboa
                       {pkg.title}
                     </h3>
                     <div className="flex items-center gap-1.5 mt-2">
-                      <span className="font-mono font-extrabold text-lg text-secondary tracking-wider bg-black/30 px-2 py-0.5 rounded border border-white/5">
+                      <span className="font-mono font-extrabold text-lg text-primary tracking-wider bg-black/30 px-2 py-0.5 rounded border border-white/5">
                         {pkg.accessCode}
                       </span>
                       {isPkgActive && (
@@ -623,10 +633,32 @@ function App() {
         />
         <main className="flex-grow max-w-7xl w-full mx-auto px-4 py-8">
           <Routes>
-            <Route path="/" element={<Home />} />
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/open" element={<Home />} />
+            <Route path="/how-it-works" element={<HowItWorksPage />} />
+            <Route path="/about" element={<AboutPage />} />
+            <Route path="/faq" element={<FaqPage />} />
+            <Route path="/contact" element={<ContactPage />} />
+            <Route path="/privacy" element={<LegalPage />} />
+            <Route path="/terms" element={<LegalPage terms />} />
             <Route path="/verify" element={<VerifyPackage />} />
+            <Route path="/verify/result" element={<VerifyPackage />} />
+            <Route path="/access" element={<VerifyPackage />} />
+            <Route path="/admin" element={<AdminDashboard user={user} loading={loading} />} />
+            <Route path="/admin/users" element={<AdminDashboard user={user} loading={loading} />} />
+            <Route path="/admin/documents" element={<AdminDashboard user={user} loading={loading} />} />
+            <Route path="/admin/verifications" element={<AdminDashboard user={user} loading={loading} />} />
+            <Route path="/admin/activity" element={<AdminDashboard user={user} loading={loading} />} />
+            <Route path="/admin/settings" element={<AdminDashboard user={user} loading={loading} />} />
             <Route path="/login" element={<Login user={user} />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/share/:accessCode" element={<ShareView />} />
+            <Route path="/documents" element={<DocumentsPage user={user} />} />
+            <Route path="/documents/:id" element={<DocumentDetailsPage user={user} />} />
+            <Route path="/upload" element={<UploadPage />} />
+            <Route path="/history" element={<DocumentsPage user={user} />} />
+            <Route path="/settings" element={<ProfilePage user={user} onLogout={handleLogout} />} />
             <Route 
               path="/dashboard" 
               element={
@@ -647,6 +679,12 @@ function App() {
             } />
           </Routes>
         </main>
+        <footer className="border-t border-card-border bg-card/40">
+          <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-6 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
+            <span>© {new Date().getFullYear()} Digi-Doc · Secure document packages</span>
+            <nav className="flex flex-wrap gap-x-4 gap-y-2"><Link to="/about">About</Link><Link to="/faq">FAQ</Link><Link to="/contact">Support</Link><Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link></nav>
+          </div>
+        </footer>
 
         {/* Global Create Package Modal */}
         <CreatePackageModal 

@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AlertTriangle, Clock, KeyRound, Loader2, Package2, ShieldCheck } from 'lucide-react';
+import { PackagePreview } from './PackagePreview';
 
 interface RetrievedPackage {
   id: string;
@@ -9,6 +10,7 @@ interface RetrievedPackage {
   expiresAt: string;
   hasPin: boolean;
   fileCount: number;
+  previewToken?: string;
 }
 
 const normalizeCode = (value: string) => value.trim().replace(/\s+/g, '').toUpperCase();
@@ -24,6 +26,7 @@ export const VerifyPackage = () => {
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
   const [pinVerified, setPinVerified] = useState(false);
+  const [previewToken, setPreviewToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const retrievePackage = async (submittedCode: string) => {
@@ -47,6 +50,7 @@ export const VerifyPackage = () => {
       setPin('');
       setPinError(null);
       setPinVerified(false);
+      setPreviewToken(result.data.previewToken || null);
     } catch (requestError: any) {
       setError(requestError.message || 'Unable to retrieve this package.');
     } finally {
@@ -85,6 +89,7 @@ export const VerifyPackage = () => {
       }
       setPinVerified(true);
       setPin('');
+      setPreviewToken(result.data.previewToken);
     } catch (verificationError: any) {
       setPinError(verificationError.message || 'PIN verification failed.');
     } finally {
@@ -120,6 +125,7 @@ export const VerifyPackage = () => {
         <div className="mt-6 p-5 rounded-xl bg-white/5 border border-card-border space-y-3">
           <div className="flex items-center gap-2 text-emerald-400 text-xs font-semibold uppercase tracking-wide"><ShieldCheck className="h-4 w-4" /> Package retrieved</div>
           <h2 className="text-lg font-bold text-white">{packageInfo.title}</h2>
+          <p className="text-xs text-emerald-400 uppercase tracking-wide">Status: {packageInfo.status}</p>
           <p className="text-xs text-muted flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" /> Expires {new Date(packageInfo.expiresAt).toLocaleString()}</p>
           <p className="text-xs text-muted">{packageInfo.fileCount} attachment{packageInfo.fileCount === 1 ? '' : 's'}</p>
           {packageInfo.hasPin && !pinVerified && (
@@ -143,6 +149,9 @@ export const VerifyPackage = () => {
           {packageInfo.hasPin && pinVerified && <p className="text-xs text-emerald-400 flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5" /> PIN verified. You may proceed when package preview becomes available.</p>}
           {!packageInfo.hasPin && <p className="text-xs text-muted flex items-center gap-1.5"><KeyRound className="h-3.5 w-3.5" /> No PIN is required. Package preview will be available in the next stage.</p>}
         </div>
+      )}
+      {packageInfo && previewToken && (!packageInfo.hasPin || pinVerified) && (
+        <PackagePreview packageId={packageInfo.id} previewToken={previewToken} />
       )}
     </div>
   );

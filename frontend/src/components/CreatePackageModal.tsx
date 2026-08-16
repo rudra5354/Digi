@@ -266,7 +266,7 @@ export const CreatePackageModal: React.FC<CreatePackageModalProps> = ({
 
               <div className="rounded-xl bg-white/5 border border-card-border p-4">
                 <div className="flex items-center justify-center gap-1.5 mb-3 text-sm font-semibold text-white">
-                  <QrCode className="h-4 w-4 text-secondary" /> Package QR Code
+                  <QrCode className="h-4 w-4 text-primary" /> Package QR Code
                 </div>
                 <p className="text-xs text-muted mb-3">Scan to open the Digi-Doc retrieval page. PIN protection still applies.</p>
                 <PackageQrCode accessCode={createdPackage.accessCode} title={createdPackage.title} size={200} />
@@ -354,7 +354,7 @@ export const CreatePackageModal: React.FC<CreatePackageModalProps> = ({
               {/* Expiry Selector */}
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5 text-secondary" /> Auto-Expiry Duration
+                  <Clock className="h-3.5 w-3.5 text-primary" /> Auto-Expiry Duration
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {[

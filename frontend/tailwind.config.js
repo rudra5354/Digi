@@ -7,26 +7,26 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: '#0a0a0c',
-        foreground: '#f8fafc',
+        background: '#111318',
+        foreground: '#f5f7fa',
         card: {
-          DEFAULT: 'rgba(17, 17, 21, 0.75)',
-          border: 'rgba(255, 255, 255, 0.08)',
-          glow: 'rgba(99, 102, 241, 0.15)'
+          DEFAULT: '#1b1f27',
+          border: 'rgba(255, 255, 255, 0.10)',
+          glow: 'rgba(255, 92, 0, 0.12)'
         },
         primary: {
-          DEFAULT: '#6366f1', // Indigo-500
-          hover: '#4f46e5', // Indigo-600
+          DEFAULT: '#ff5c00',
+          hover: '#e65000',
         },
         secondary: {
-          DEFAULT: '#06b6d4', // Cyan-500
-          hover: '#0891b2', // Cyan-600
+          DEFAULT: '#272d38',
+          hover: '#343c49',
         },
         accent: {
           purple: '#a855f7',
           pink: '#ec4899',
         },
-        muted: '#94a3b8',
+        muted: '#9ca3af',
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
@@ -35,8 +35,11 @@ export default {
       boxShadow: {
         'glass-sm': '0 2px 8px 0 rgba(0, 0, 0, 0.3)',
         'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.5)',
-        'glow-indigo': '0 0 20px 0 rgba(99, 102, 241, 0.35)',
-        'glow-cyan': '0 0 20px 0 rgba(6, 118, 212, 0.35)',
+        'glow-indigo': '0 10px 28px 0 rgba(255, 92, 0, 0.18)',
+        'glow-cyan': '0 8px 24px 0 rgba(0, 0, 0, 0.26)',
+      },
+      fontFamily: {
+        heading: ['"Space Grotesk"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       backdropBlur: {
         'glass': '12px',

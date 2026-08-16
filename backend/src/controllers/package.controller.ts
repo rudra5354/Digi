@@ -4,6 +4,10 @@ import {
   createPackage, 
   addFilesToPackage,
   getPackageMetadataByAccessCode,
+  createPreviewSession,
+  getPackagePreviewFiles,
+  getAuthorizedPreviewFile,
+  recordPreviewDownload,
   verifyPackagePin,
   claimPackage,
   downloadPackageFile,
@@ -368,6 +372,7 @@ export const retrievePackageHandler = async (req: Request, res: Response, next: 
         expiresAt: metadata.expiresAt,
         hasPin: metadata.hasPin,
         fileCount: metadata.filesCount,
+        previewToken: metadata.hasPin ? undefined : createPreviewSession(metadata.id),
       },
       error: null,
       meta: {},
@@ -375,6 +380,74 @@ export const retrievePackageHandler = async (req: Request, res: Response, next: 
   } catch (err: any) {
     if (err.message === 'Package not found.') {
       return res.status(404).json({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Package not found.' }, meta: {} });
+    }
+    if (err.message.includes('Status: EXPIRED')) {
+      return res.status(410).json({ success: false, data: null, error: { code: 'PACKAGE_EXPIRED', message: 'This package has expired.' }, meta: {} });
+    }
+    if (err.message.includes('Status: REVOKED')) {
+      return res.status(403).json({ success: false, data: null, error: { code: 'PACKAGE_REVOKED', message: 'This package is no longer available.' }, meta: {} });
+    }
+    next(err);
+  }
+};
+
+/**
+ * Phase 12 preview endpoint. It returns file metadata and short-lived preview
+ * URLs only; it does not download files or expose storage paths.
+ */
+export const getPackagePreviewHandler = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { packageId } = req.params;
+    if (!packageId || !z.string().uuid().safeParse(packageId).success) {
+      return res.status(400).json({ success: false, data: null, error: { code: 'INVALID_PACKAGE_ID', message: 'A valid package ID is required.' }, meta: {} });
+    }
+
+    const authorization = req.headers.authorization;
+    const previewToken = authorization?.startsWith('Bearer ') ? authorization.slice(7) : undefined;
+    const files = await getPackagePreviewFiles(packageId, previewToken, req.ip, req.headers['user-agent']);
+    return res.status(200).json({ success: true, data: { files }, error: null, meta: {} });
+  } catch (err: any) {
+    if (err.message === 'Package not found.') {
+      return res.status(404).json({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Package not found.' }, meta: {} });
+    }
+    if (err.message === 'PREVIEW_NOT_AUTHORIZED') {
+      return res.status(403).json({ success: false, data: null, error: { code: 'PREVIEW_NOT_AUTHORIZED', message: 'Verify package access before viewing previews.' }, meta: {} });
+    }
+    if (err.message.includes('Status: EXPIRED')) {
+      return res.status(410).json({ success: false, data: null, error: { code: 'PACKAGE_EXPIRED', message: 'This package has expired.' }, meta: {} });
+    }
+    if (err.message.includes('Status: REVOKED')) {
+      return res.status(403).json({ success: false, data: null, error: { code: 'PACKAGE_REVOKED', message: 'This package is no longer available.' }, meta: {} });
+    }
+    next(err);
+  }
+};
+
+/**
+ * Generates a short-lived URL for exactly one preview-authorized file.
+ */
+export const createPreviewDownloadHandler = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { packageId, fileId } = req.params;
+    if (!z.string().uuid().safeParse(packageId).success || !z.string().uuid().safeParse(fileId).success) {
+      return res.status(400).json({ success: false, data: null, error: { code: 'INVALID_INPUT', message: 'A valid package and file ID are required.' }, meta: {} });
+    }
+
+    const authorization = req.headers.authorization;
+    const previewToken = authorization?.startsWith('Bearer ') ? authorization.slice(7) : undefined;
+    const { filePath, fileName } = await getAuthorizedPreviewFile(packageId, fileId, previewToken);
+    const { signedUrl, error } = await generateSignedDownloadUrl(filePath, 60, fileName);
+    if (error || !signedUrl) throw error || new Error('Unable to prepare file download.');
+
+    await recordPreviewDownload(packageId, req.ip, req.headers['user-agent']);
+
+    return res.status(200).json({ success: true, data: { downloadUrl: signedUrl, expiresInSeconds: 60 }, error: null, meta: {} });
+  } catch (err: any) {
+    if (err.message === 'Package not found.' || err.message === 'File not found in this package.') {
+      return res.status(404).json({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Requested file is unavailable.' }, meta: {} });
+    }
+    if (err.message === 'PREVIEW_NOT_AUTHORIZED') {
+      return res.status(403).json({ success: false, data: null, error: { code: 'PREVIEW_NOT_AUTHORIZED', message: 'Verify package access before downloading files.' }, meta: {} });
     }
     if (err.message.includes('Status: EXPIRED')) {
       return res.status(410).json({ success: false, data: null, error: { code: 'PACKAGE_EXPIRED', message: 'This package has expired.' }, meta: {} });

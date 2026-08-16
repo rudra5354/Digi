@@ -5,6 +5,7 @@ import rateLimit from 'express-rate-limit';
 import { config } from './config';
 import { requireAuth } from './middleware/auth';
 import packageRoutes from './routes/package.routes';
+import adminRoutes from './routes/admin.routes';
 
 const app = express();
 
@@ -71,6 +72,7 @@ app.get('/api/auth/me', requireAuth, (req: Request, res: Response) => {
 
 // Package Management Routes
 app.use('/api/packages', packageRoutes);
+app.use('/api/admin', adminRoutes);
 
 // 404 Route Not Found Middleware
 app.use((req: Request, res: Response, next: NextFunction) => {
